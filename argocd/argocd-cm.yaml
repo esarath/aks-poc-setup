@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # ArgoCD UI Configuration
+  url: https://argocd.example.com
+  
+  # Repository Configuration
+  repositories: |
+    - url: https://github.com/esarath/aks-poc-setup.git
+      name: aks-poc-setup
+      connectionState:
+        status: Connected
+    
+  # Omitted for brevity in the example, but you can add more repositories
+  
+  # Application Management
+  application.instanceLabelKey: argocd.argoproj.io/instance
+  
+  # Resource Tracking
+  resource.customizations.health: |
+    # Custom health checks for various resources
+    Deployment:
+      status.healthStatus: |
+        obj = {}
+        if obj.status.availableReplicas == obj.spec.replicas:
+          return "Healthy"
+        else:
+          return "Progressing"
+  
+  # Dex Configuration for Authentication
+  dex.config: |
+    connectors:
+      - type: oidc
+        id: github
+        name: GitHub
+        config:
+          issuer: https://github.com
+          clientID: $argocd-github-client-id
+          clientSecret: $argocd-github-client-secret
+          scopes:
+            - user:email
+          redirectURI: https://argocd.example.com/api/callback
+  
+  # Helm Management
+  helm.valuesFileSchemes: |
+    - secrets+literal://
+    - secrets+import://
+  
+  # Resource Exclusion
+  resource.exclusions: |
+    - apiGroups:
+        - "*"
+      kinds:
+        - "Event"
+      clusters:
+        - "*"
+  
+  # Server Options
+  server.insecure: "false"
+  server.staticassets: "/shared/app"
+  server.disable.auth: "false"
+  server.enable.gzip: "true"
+  
+  # Admin Password (change in production)
+  admin.enabled: "true"
+  admin.password: "$2a$10$wWdQwX6lQjWvN7Qv5xQV.O3lXkXWlXQvN7Qv5xQV.O3lXkXWlXQvN7"
+  
+  # Redis Configuration
+  redis: |
+    server: "argocd-redis.argocd.svc.cluster.local:6379"

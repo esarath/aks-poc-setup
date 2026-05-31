@@ -1,0 +1,117 @@
+# Default values for myapp
+replicaCount: 2
+
+image:
+  repository: esarathmails/aks-poc-app
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources: {}
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Database Configuration
+database:
+  enabled: false
+  host: ""
+  port: 5432
+  name: "appdb"
+  user: "postgres"
+  password: ""
+  sslmode: "require"
+
+# PostgreSQL Chart Configuration
+postgresql:
+  enabled: false
+  image:
+    repository: bitnami/postgresql
+    tag: 13.6.0
+  auth:
+    postgresPassword: "changeme"
+    database: "appdb"
+    username: "appuser"
+    password: "changeme"
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+    namespace: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Health Check Configuration
+healthcheck:
+  enabled: true
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Environment Variables
+env:
+  - name: LOG_LEVEL
+    value: "info"
+  - name: APP_ENV
+    value: "production"
+
+# ConfigMap
+configMap:
+  enabled: true
+  data: {}

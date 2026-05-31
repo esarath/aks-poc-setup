@@ -1,0 +1,138 @@
+name: Terraform Infrastructure Deployment
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
+          - plan
+
+env:
+  TERRAFORM_VERSION: "1.5.7"
+  ARM_SUBSCRIPTION_ID: "7908ea24-a708-4291-be15-98426e3e9ca5"
+  ARM_RESOURCE_GROUP: "rg-aks-poc"
+  ARM_LOCATION: "eastus"
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      id-token: write
+    
+    strategy:
+      matrix:
+        environment: [poc]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+        terraform_wrapper: false
+    
+    - name: Terraform Init
+      working-directory: ./terraform
+      env:
+        ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        ARM_SUBSCRIPTION_ID: ${{ env.ARM_SUBSCRIPTION_ID }}
+      run: |
+        terraform init -upgrade \
+          -backend-config="resource_group_name=tf-state-rg" \
+          -backend-config="storage_account_name=tfstateakspoc" \
+          -backend-config="container_name=tfstate" \
+          -backend-config="key=aks-poc-${{ matrix.environment }}.tfstate"
+    
+    - name: Terraform Validate
+      working-directory: ./terraform
+      run: terraform validate
+    
+    - name: Terraform Format Check
+      working-directory: ./terraform
+      run: terraform fmt -check -recursive
+    
+    - name: Terraform Plan
+      working-directory: ./terraform
+      env:
+        ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        ARM_SUBSCRIPTION_ID: ${{ env.ARM_SUBSCRIPTION_ID }}
+      run: |
+        terraform plan -out=tfplan \
+          -var="environment=${{ matrix.environment }}" \
+          -var="resource_group_name=${{ env.ARM_RESOURCE_GROUP }}-${{ matrix.environment }}" \
+          -var="location=${{ env.ARM_LOCATION }}" \
+          -var="subscription_id=${{ env.ARM_SUBSCRIPTION_ID }}"
+    
+    - name: Terraform Apply
+      if: github.event.inputs.action == 'apply' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      working-directory: ./terraform
+      env:
+        ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        ARM_SUBSCRIPTION_ID: ${{ env.ARM_SUBSCRIPTION_ID }}
+      run: terraform apply -auto-approve tfplan
+    
+    - name: Terraform Destroy
+      if: github.event.inputs.action == 'destroy'
+      working-directory: ./terraform
+      env:
+        ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        ARM_SUBSCRIPTION_ID: ${{ env.ARM_SUBSCRIPTION_ID }}
+      run: |
+        terraform destroy -auto-approve \
+          -var="environment=${{ matrix.environment }}" \
+          -var="resource_group_name=${{ env.ARM_RESOURCE_GROUP }}-${{ matrix.environment }}" \
+          -var="location=${{ env.ARM_LOCATION }}" \
+          -var="subscription_id=${{ env.ARM_SUBSCRIPTION_ID }}"
+    
+    - name: Upload Terraform State
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: terraform-state-${{ matrix.environment }}
+        path: terraform/.terraform/
+    
+    - name: Get AKS Credentials
+      if: github.event.inputs.action == 'apply' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      run: |
+        az aks get-credentials \
+          --resource-group ${{ env.ARM_RESOURCE_GROUP }}-${{ matrix.environment }} \
+          --name aks-poc-cluster-${{ matrix.environment }} \
+          --admin
+    
+    - name: Verify Cluster Access
+      if: github.event.inputs.action == 'apply' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      run: kubectl get nodes
+    
+    - name: Azure Logout
+      if: always()
+      run: az logout

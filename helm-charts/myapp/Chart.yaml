@@ -1,0 +1,23 @@
+apiVersion: v2
+name: myapp
+description: A Helm chart for sample AKS POC application
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+- aks
+- poc
+- web-application
+- sample
+
+maintainers:
+- name: Sarath
+  email: esarathmails@gmail.com
+
+dependencies:
+- name: postgresql
+  version: 12.5.1
+  repository: https://charts.bitnami.com/bitnami
+  condition: postgresql.enabled
+  alias: postgresql

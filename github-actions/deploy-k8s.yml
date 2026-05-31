@@ -1,0 +1,183 @@
+name: Deploy to Kubernetes
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'helm-charts/**'
+      - '.github/workflows/deploy-k8s.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'poc'
+        type: choice
+        options:
+          - poc
+          - dev
+          - staging
+          - prod
+
+env:
+  AKS_RESOURCE_GROUP: rg-aks-poc
+  AKS_CLUSTER_NAME: aks-poc-cluster
+  AKS_REGION: eastus
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    environment: ${{ github.event.inputs.environment || 'poc' }}
+    
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.3'
+    
+    - name: Get AKS Credentials
+      run: |
+        az aks get-credentials \
+          --resource-group ${{ env.AKS_RESOURCE_GROUP }} \
+          --name ${{ env.AKS_CLUSTER_NAME }} \
+          --admin
+    
+    - name: Verify Cluster Access
+      run: kubectl get nodes
+    
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: 'v3.12.0'
+    
+    - name: Add Helm Repositories
+      run: |
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+        helm repo update
+    
+    - name: Update GitOps Repository
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        
+        # Clone the gitops repository (change to your actual gitops repo)
+        # git clone https://x-access-token:${{ secrets.GITOPS_TOKEN }}@github.com/esarath/aks-poc-gitops.git gitops
+        
+        # Update Helm chart references
+        # cp -r helm-charts/myapp gitops/charts/
+        
+        # Commit and push changes
+        # cd gitops
+        # git add .
+        # git commit -m "Update Helm chart version ${{ github.sha }}"
+        # git push origin main
+    
+    - name: Deploy Application via Helm
+      run: |
+        helm upgrade --install myapp ./helm-charts/myapp \
+          --namespace production \
+          --create-namespace \
+          -f ./helm-charts/myapp/values-prod.yaml \
+          --set image.tag="${{ github.sha }}" \
+          --wait \
+          --timeout 5m
+    
+    - name: Verify Deployment
+      run: |
+        kubectl rollout status deployment/myapp -n production --timeout=5m
+        kubectl get pods -n production
+    
+    - name: Run Smoke Tests
+      run: |
+        # Get application endpoint
+        APP_ENDPOINT=$(kubectl get svc myapp -n production -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        
+        if [ -z "$APP_ENDPOINT" ]; then
+          echo "No external IP assigned yet"
+          exit 0
+        fi
+        
+        # Health check
+        for i in {1..30}; do
+          if curl -f http://$APP_ENDPOINT:8080/health; then
+            echo "Health check passed"
+            break
+          fi
+          echo "Health check attempt $i failed, retrying..."
+          sleep 10
+        done
+    
+    - name: Rollback on Failure
+      if: failure()
+      run: |
+        helm rollback myapp -n production
+        echo "Rollback completed"
+    
+    - name: Notify Deployment Status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "Deployment successful"
+        else
+          echo "Deployment failed"
+          exit 1
+        fi
+    
+    - name: Azure Logout
+      if: always()
+      run: az logout
+
+  argocd-sync:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    
+    - name: Get AKS Credentials
+      run: |
+        az aks get-credentials \
+          --resource-group ${{ env.AKS_RESOURCE_GROUP }} \
+          --name ${{ env.AKS_CLUSTER_NAME }} \
+          --admin
+    
+    - name: Install ArgoCD CLI
+      run: |
+        version=$(curl --silent "https://api.github.com/repos/argoproj/argo-cd/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/download/$version/argocd-linux-amd64
+        chmod +x argocd-linux-amd64
+        sudo mv argocd-linux-amd64 /usr/local/bin/argocd
+    
+    - name: Sync ArgoCD Application
+      run: |
+        argocd login argocd-server.argocd.svc.cluster.local --username admin --password ${{ secrets.ARGOCD_PASSWORD }} --grpc-web
+        argocd app sync myapp --server argocd-server.argocd.svc.cluster.local
+        argocd app wait myapp --health --timeout 5m
+    
+    - name: Azure Logout
+      if: always()
+      run: az logout

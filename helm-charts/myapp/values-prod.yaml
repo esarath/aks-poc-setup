@@ -1,0 +1,73 @@
+# Production values for myapp
+replicaCount: 3
+
+image:
+  repository: esarathmails/aks-poc-app
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+  - host: app.example.com
+    paths:
+    - path: /
+      pathType: Prefix
+  tls:
+  - secretName: myapp-tls
+    hosts:
+    - app.example.com
+
+database:
+  enabled: true
+  host: "aks-poc-postgres.postgres.database.azure.com"
+  port: 5432
+  name: "appdb"
+  user: "appuser"
+  password: "" # Set via secret
+  sslmode: "require"
+
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+    interval: 30s
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - myapp
+        topologyKey: kubernetes.io/hostname

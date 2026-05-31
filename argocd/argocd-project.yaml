@@ -1,0 +1,64 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: production
+  namespace: argocd
+spec:
+  description: Production applications project
+  sourceRepos:
+  - https://github.com/esarath/aks-poc-setup.git
+  - https://github.com/argoproj/argo-helm
+  
+  destinations:
+  - namespace: production
+    server: https://kubernetes.default.svc
+  - namespace: monitoring
+    server: https://kubernetes.default.svc
+  - namespace: ingress-nginx
+    server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  
+  namespaceResourceBlacklist:
+  - group: ''
+    kind: Event
+  
+  roles:
+  - name: admin
+    description: Admin access to production project
+    policies:
+    - p, proj:production:*, *, *, *, allow
+    groups:
+    - platform-team@github.com
+    - sarath@github.com
+  
+  - name: developer
+    description: Developer access to production project
+    policies:
+    - p, proj:production:applications, *, production/*, allow
+    - p, proj:production:applications, create, production/*, allow
+    - p, proj:production:applications, update, production/*, allow
+    - p, proj:production:applications, delete, production/*, allow
+    - p, proj:production:applications, sync, production/*, allow
+    groups:
+    - developers@github.com
+  
+  - name: readonly
+    description: Read-only access to production project
+    policies:
+    - p, proj:production:applications, get, production/*, allow
+    groups:
+    - viewers@github.com
+  
+  orphanedResources:
+    warn: true
+    
+  syncWindows:
+  - kind: allow
+    schedule: '0 22 * * *'
+    duration: 12h
+    applications:
+    - '*'
+    manualSync: true

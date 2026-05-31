@@ -1,0 +1,161 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript', 'python']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+        queries: security-extended,security-and-quality
+    
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:${{matrix.language}}"
+
+  dependency-review:
+    runs-on: ubuntu-latest
+    
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v3
+      with:
+        fail-on-severity: high
+        allow-licenses: MIT, Apache-2.0, BSD-3-Clause
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run TrivyFS for file system scanning
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-fs-results.sarif'
+        severity: 'CRITICAL,HIGH'
+    
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-fs-results.sarif'
+        category: 'file-system-scan'
+
+  container-scan:
+    runs-on: ubuntu-latest
+    needs: codeql
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Build Docker image
+      run: |
+        docker build -t esarathmails/aks-poc-app:scan ./applications/myapp
+    
+    - name: Run Trivy for image scanning
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'esarathmails/aks-poc-app:scan'
+        format: 'table'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '1'
+        vuln-type: 'os,library'
+    
+    - name: Run Grype for image scanning
+      uses: anchore/scan-action@v3
+      with:
+        image: 'esarathmails/aks-poc-app:scan'
+        severity-cutoff: high
+        format: sarif
+        output: grype-results.sarif
+    
+    - name: Upload Grype scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'grype-results.sarif'
+        category: 'container-scan'
+
+  kubernetes-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.3'
+    
+    - name: Install kube-score
+      run: |
+        curl -L https://github.com/zegl/kube-score/releases/download/v1.16.1/kube-score_1.16.1_linux_amd64 -o kube-score
+        chmod +x kube-score
+    
+    - name: Run kube-score
+      run: |
+        ./kube-score score helm-charts/myapp/templates/*.yaml --ignore-test pod-networkpolicy
+    
+    - name: Run Kubesec
+      run: |
+        docker run --rm -v $(pwd)/helm-charts/myapp/templates:/scan kubesec/kubesec:latest scan /scan/deployment.yaml
+
+  sast-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run Snyk to check for vulnerabilities
+      uses: snyk/actions/golang@master
+      with:
+        command: monitor
+        args: --severity-threshold=high
+    
+    - name: Run Bandit for Python security
+      run: |
+        pip install bandit[toml]
+        bandit -r ./applications/myapp -f json -o bandit-report.json
+    
+    - name: Upload Bandit report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: bandit-report
+        path: bandit-report.json

@@ -1,0 +1,22 @@
+{{- if .Values.configMap.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "myapp.fullname" . }}-config
+  labels:
+    {{- include "myapp.labels" . | nindent 4 }}
+data:
+  {{- if .Values.configMap.data }}
+  {{- toYaml .Values.configMap.data | nindent 2 }}
+  {{- else }}
+  application.yaml: |
+    app:
+      name: myapp
+      environment: {{ .Release.Namespace }}
+      version: {{ .Chart.AppVersion }}
+    server:
+      port: {{ .Values.service.port }}
+    logging:
+      level: {{ .Values.env | default "info" }}
+  {{- end }}
+{{- end }}
