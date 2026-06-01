@@ -2,8 +2,16 @@
 
 # AKS POC Infrastructure Deployment Script
 # This script automates the deployment of the complete AKS infrastructure
+# Usage: ./deploy-infrastructure.sh (run from project root or scripts directory)
 
 set -e
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Change to project root for consistent execution
+cd "$PROJECT_ROOT"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -123,19 +131,21 @@ create_storage_account() {
         --location $LOCATION \
         --sku Standard_LRS \
         --kind StorageV2 \
-        --allow-blob-public-access false
+        --allow-blob-public-access false \
+        --auth-mode login
     
     print_success "Storage account created"
     
     print_info "Creating storage container..."
     az storage container create \
         --name tfstate \
-        --account-name $STORAGE_ACCOUNT_NAME
+        --account-name $STORAGE_ACCOUNT_NAME \
+        --auth-mode login
     
     print_success "Storage container created"
     
     print_info "Storage account name: $STORAGE_ACCOUNT_NAME"
-    echo "STORAGE_ACCOUNT_NAME=$STORAGE_ACCOUNT_NAME" > storage-account.env
+    echo "STORAGE_ACCOUNT_NAME=$STORAGE_ACCOUNT_NAME" > "$SCRIPT_DIR/storage-account.env"
     
     echo ""
 }
@@ -144,11 +154,11 @@ create_storage_account() {
 deploy_terraform() {
     print_header "Deploying Terraform Infrastructure"
     
-    cd terraform
+    cd "$PROJECT_ROOT/terraform"
     
     # Update backend configuration
     print_info "Updating Terraform backend configuration..."
-    STORAGE_ACCOUNT_NAME=$(cat ../storage-account.env | cut -d'=' -f2)
+    STORAGE_ACCOUNT_NAME=$(cat "$SCRIPT_DIR/storage-account.env" | cut -d'=' -f2)
     
     cat > backend.tf <<EOF
 terraform {
@@ -194,7 +204,7 @@ EOF
         exit 0
     fi
     
-    cd ..
+    cd "$PROJECT_ROOT"
     echo ""
 }
 
