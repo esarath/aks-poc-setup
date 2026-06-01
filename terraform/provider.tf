@@ -19,13 +19,6 @@ terraform {
       version = "~> 2.23.0"
     }
   }
-  
-  backend "azurerm" {
-    resource_group_name  = "tf-state-rg"
-    storage_account_name = "tfstateaks poc"
-    container_name       = "tfstate"
-    key                  = "aks-poc.tfstate"
-  }
 }
 
 provider "azurerm" {

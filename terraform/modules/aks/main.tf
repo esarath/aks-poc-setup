@@ -34,7 +34,6 @@ resource "azurerm_kubernetes_cluster" "aks" {
     pod_cidr           = "10.244.0.0/16"
     
     # CNI specific settings
-    dns_service_ip = var.dns_service_ip
     docker_bridge_cidr = "172.17.0.1/16"
     
     # Outbound type
@@ -125,7 +124,6 @@ resource "azurerm_kubernetes_cluster" "aks" {
     max_graceful_termination_sec     = 600
     max_node_provisioning_time       = "15m"
     max_unhealthy_percentage         = 33
-    max_unhealthy_percentage         = 33
     new_pod_scale_up_delay           = "0s"
     ok_total_unhealthy_count         = 3
     scale_down_delay_after_add       = "10m"
@@ -205,16 +203,16 @@ resource "azurerm_kubernetes_cluster_node_pool" "userpool" {
 #     "nvidia.com/gpu=true:NoSchedule"
 #   ]
 #   
-#   # Use spot instances for cost savings
-  priority        = "Spot"
-  eviction_policy = "Delete"
-  spot_max_price  = -1
-  
-  # Upgrade settings
-  upgrade_settings {
-    max_surge = "1"
-  }
-}
+#   # Use spot instances for cost savings (optional)
+#   priority        = "Spot"
+#   eviction_policy = "Delete"
+#   spot_max_price  = -1
+#   
+#   # Upgrade settings
+#   upgrade_settings {
+#     max_surge = "1"
+#   }
+# }
 
 # Assign ACR Pull Role to AKS Identity
 resource "azurerm_role_assignment" "acr_pull" {
