@@ -114,19 +114,19 @@ variable "user_node_pool_count" {
 }
 
 variable "enable_gpu_node_pool" {
-  description = "Enable GPU node pool for ML/AI workloads"
+  description = "Enable GPU node pool for ML/AI workloads (disabled for cost efficiency)"
   type        = bool
   default     = false
 }
 
 variable "gpu_node_pool_vm_size" {
-  description = "VM size for GPU node pool"
+  description = "VM size for GPU node pool (if enabled)"
   type        = string
   default     = "Standard_NC4as_T4_v3"
 }
 
 variable "gpu_node_pool_count" {
-  description = "Number of nodes in GPU node pool"
+  description = "Number of nodes in GPU node pool (if enabled)"
   type        = number
   default     = 0
 }

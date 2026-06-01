@@ -174,36 +174,38 @@ resource "azurerm_kubernetes_cluster_node_pool" "userpool" {
   }
 }
 
-# GPU Node Pool (Optional)
-resource "azurerm_kubernetes_cluster_node_pool" "gpupool" {
-  count                 = var.enable_gpu_node_pool ? 1 : 0
-  name                  = "gpupool"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
-  node_count            = var.gpu_node_pool_count
-  vm_size               = var.gpu_node_pool_vm_size
-  os_disk_size_gb       = 100
-  os_disk_type          = "Premium_LRS"
-  vnet_subnet_id        = var.aks_gpu_subnet_id
-  enable_auto_scaling   = var.enable_auto_scaling
-  min_count             = 0
-  max_count             = 2
-  max_pods              = 110
-  os_type               = "Linux"
-  orchestrator_version  = var.kubernetes_version
-  
-  # GPU-specific labels
-  node_labels = {
-    "nodepool-type" = "gpu"
-    "accelerator"   = "nvidia-tesla-t4"
-    "kubernetes.io/role" = "worker"
-  }
-  
-  # GPU taint to schedule GPU workloads only
-  node_taints = [
-    "nvidia.com/gpu=true:NoSchedule"
-  ]
-  
-  # Use spot instances for cost savings
+# GPU Node Pool (Disabled for Cost Efficiency)
+# GPU workloads are expensive. This configuration focuses on cost-effective CPU-based workloads.
+# To enable GPU workloads later, set enable_gpu_node_pool = true in variables.tf
+# resource "azurerm_kubernetes_cluster_node_pool" "gpupool" {
+#   count                 = var.enable_gpu_node_pool ? 1 : 0
+#   name                  = "gpupool"
+#   kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
+#   node_count            = var.gpu_node_pool_count
+#   vm_size               = var.gpu_node_pool_vm_size
+#   os_disk_size_gb       = 100
+#   os_disk_type          = "Premium_LRS"
+#   vnet_subnet_id        = var.aks_gpu_subnet_id
+#   enable_auto_scaling   = var.enable_auto_scaling
+#   min_count             = 0
+#   max_count             = 2
+#   max_pods              = 110
+#   os_type               = "Linux"
+#   orchestrator_version  = var.kubernetes_version
+#   
+#   # GPU-specific labels
+#   node_labels = {
+#     "nodepool-type" = "gpu"
+#     "accelerator"   = "nvidia-tesla-t4"
+#     "kubernetes.io/role" = "worker"
+#   }
+#   
+#   # GPU taint to schedule GPU workloads only
+#   node_taints = [
+#     "nvidia.com/gpu=true:NoSchedule"
+#   ]
+#   
+#   # Use spot instances for cost savings
   priority        = "Spot"
   eviction_policy = "Delete"
   spot_max_price  = -1

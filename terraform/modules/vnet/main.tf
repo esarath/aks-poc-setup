@@ -46,8 +46,11 @@ resource "azurerm_subnet" "aks_user" {
   }
 }
 
-# AKS GPU Subnet (Optional)
+# AKS GPU Subnet (Disabled for Cost Efficiency)
+# GPU workloads are expensive. This configuration focuses on cost-effective CPU-based workloads.
+# To enable GPU workloads later, set enable_gpu_subnet = true in variables.tf
 resource "azurerm_subnet" "aks_gpu" {
+  count                 = var.enable_gpu_subnet ? 1 : 0
   name                 = "aks-gpu-subnet"
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.main.name

@@ -81,20 +81,23 @@ variable "max_node_count" {
   type        = number
 }
 
-# GPU Configuration
+# GPU Configuration (Disabled for Cost Efficiency)
 variable "enable_gpu_node_pool" {
-  description = "Enable GPU node pool"
+  description = "Enable GPU node pool (disabled by default for cost efficiency)"
   type        = bool
+  default     = false
 }
 
 variable "gpu_node_pool_vm_size" {
-  description = "VM size for GPU node pool"
+  description = "VM size for GPU node pool (if enabled)"
   type        = string
+  default     = "Standard_NC4as_T4_v3"
 }
 
 variable "gpu_node_pool_count" {
-  description = "Number of nodes in GPU node pool"
+  description = "Number of nodes in GPU node pool (if enabled)"
   type        = number
+  default     = 0
 }
 
 # Azure AD Integration

@@ -27,9 +27,15 @@ variable "aks_user_subnet_cidr" {
 }
 
 variable "aks_gpu_subnet_cidr" {
-  description = "CIDR block for AKS GPU node subnet"
+  description = "CIDR block for AKS GPU node subnet (disabled for cost efficiency)"
   type        = string
   default     = "10.0.3.0/24"
+}
+
+variable "enable_gpu_subnet" {
+  description = "Enable GPU subnet (disabled by default for cost efficiency)"
+  type        = bool
+  default     = false
 }
 
 variable "database_subnet_cidr" {

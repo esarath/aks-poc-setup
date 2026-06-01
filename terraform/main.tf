@@ -140,7 +140,7 @@ module "aks" {
   vnet_id                    = module.vnet.vnet_id
   aks_system_subnet_id       = module.vnet.aks_system_subnet_id
   aks_user_subnet_id         = module.vnet.aks_user_subnet_id
-  aks_gpu_subnet_id          = module.vnet.aks_gpu_subnet_id
+  aks_gpu_subnet_id          = var.enable_gpu_node_pool ? module.vnet.aks_gpu_subnet_id : null
   
   # Node Pool Configuration
   system_node_pool_vm_size    = var.system_node_pool_vm_size

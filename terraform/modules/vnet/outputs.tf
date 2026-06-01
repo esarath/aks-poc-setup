@@ -34,13 +34,13 @@ output "aks_user_subnet_cidr" {
 }
 
 output "aks_gpu_subnet_id" {
-  description = "ID of the AKS GPU subnet"
-  value       = azurerm_subnet.aks_gpu.id
+  description = "ID of the AKS GPU subnet (disabled for cost efficiency)"
+  value       = var.enable_gpu_subnet ? azurerm_subnet.aks_gpu[0].id : null
 }
 
 output "aks_gpu_subnet_cidr" {
-  description = "CIDR block of the AKS GPU subnet"
-  value       = azurerm_subnet.aks_gpu.address_prefixes[0]
+  description = "CIDR block of the AKS GPU subnet (disabled for cost efficiency)"
+  value       = var.enable_gpu_subnet ? azurerm_subnet.aks_gpu[0].address_prefixes[0] : null
 }
 
 output "database_subnet_id" {
